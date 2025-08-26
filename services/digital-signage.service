@@ -1,0 +1,41 @@
+[Unit]
+Description=Digital Signage Platform
+Documentation=https://github.com/example/digital-signage
+After=network.target network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=signage
+Group=signage
+WorkingDirectory=/opt/digital-signage
+Environment=PYTHONPATH=/opt/digital-signage
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/python3 /opt/digital-signage/main.py --host 0.0.0.0 --port 5000
+ExecReload=/bin/kill -HUP $MAINPID
+KillMode=mixed
+Restart=always
+RestartSec=5
+TimeoutStopSec=30
+
+# Security settings
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/opt/digital-signage
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+
+# Resource limits
+LimitNOFILE=65536
+MemoryMax=512M
+CPUQuota=50%
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=digital-signage
+
+[Install]
+WantedBy=multi-user.target

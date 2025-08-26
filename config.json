@@ -1,0 +1,36 @@
+{
+  "dashboards": [
+    {
+      "name": "UptimeKuma Demo",
+      "url": "/static/demo.html",
+      "type": "uptimekuma",
+      "username": "",
+      "password": "",
+      "enabled": true
+    },
+    {
+      "name": "UptimeKuma Status (Example)",
+      "url": "http://localhost:3001",
+      "type": "uptimekuma",
+      "username": "",
+      "password": "",
+      "enabled": false
+    },
+    {
+      "name": "Grafana Monitoring (Example)",
+      "url": "http://localhost:3000",
+      "type": "grafana",
+      "username": "",
+      "password": "",
+      "enabled": false
+    }
+  ],
+  "settings": {
+    "rotation_interval": 30,
+    "refresh_interval": 300,
+    "auto_refresh": true,
+    "fullscreen": true,
+    "show_navigation": true,
+    "enable_keyboard_shortcuts": true
+  }
+}
