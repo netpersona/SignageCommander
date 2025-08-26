@@ -147,23 +147,43 @@ class DigitalSignage {
     buildDashboardUrl(dashboard) {
         let url = dashboard.url;
         
-        // Add authentication if provided
-        if (dashboard.username && dashboard.password) {
-            try {
-                const urlObj = new URL(url);
-                urlObj.username = dashboard.username;
-                urlObj.password = dashboard.password;
-                url = urlObj.toString();
-            } catch (error) {
-                console.warn('Failed to add authentication to URL:', error);
+        // Check if this is an external URL that needs proxying
+        const isExternal = url.startsWith('http://') || url.startsWith('https://');
+        
+        if (isExternal) {
+            // Use proxy to bypass X-Frame-Options and CORS restrictions
+            let proxyUrl = `/proxy/${url}`;
+            
+            // Add authentication parameters for proxy if provided
+            if (dashboard.username && dashboard.password) {
+                const separator = proxyUrl.includes('?') ? '&' : '?';
+                proxyUrl += `${separator}username=${encodeURIComponent(dashboard.username)}&password=${encodeURIComponent(dashboard.password)}`;
             }
+            
+            // Add cache-busting parameter
+            const separator = proxyUrl.includes('?') ? '&' : '?';
+            proxyUrl += `${separator}_t=${Date.now()}`;
+            
+            return proxyUrl;
+        } else {
+            // For local/relative URLs, use original logic
+            if (dashboard.username && dashboard.password) {
+                try {
+                    const urlObj = new URL(url, window.location.origin);
+                    urlObj.username = dashboard.username;
+                    urlObj.password = dashboard.password;
+                    url = urlObj.toString();
+                } catch (error) {
+                    console.warn('Failed to add authentication to URL:', error);
+                }
+            }
+            
+            // Add cache-busting parameter for refreshes
+            const separator = url.includes('?') ? '&' : '?';
+            url += `${separator}_t=${Date.now()}`;
+            
+            return url;
         }
-        
-        // Add cache-busting parameter for refreshes
-        const separator = url.includes('?') ? '&' : '?';
-        url += `${separator}_t=${Date.now()}`;
-        
-        return url;
     }
     
     setupProgressIndicators() {
