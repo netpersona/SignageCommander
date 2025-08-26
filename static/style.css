@@ -12,7 +12,7 @@ html, body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
     background-color: #0f172a;
     color: #f8fafc;
-    overflow: hidden;
+    overflow: auto; /* ensures scrolling if needed */
 }
 
 #app {
@@ -313,7 +313,7 @@ kbd {
 
 /* Fullscreen styles */
 body.fullscreen {
-    overflow: hidden;
+    overflow: auto; /* ensures scrolling if needed */
 }
 
 body.fullscreen .nav-bar {
