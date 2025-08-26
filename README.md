@@ -4,6 +4,11 @@
 
 A web-based digital signage platform designed to display and rotate between UptimeKuma status dashboards and Grafana monitoring dashboards. The application provides a kiosk-style interface with automatic rotation, fullscreen support, and keyboard navigation controls. Built with Python 3.8+ using only standard library modules for maximum compatibility and minimal dependencies.
 
+![MainDash](https://github.com/user-attachments/assets/350fdb79-f1ae-4118-a70c-563e784f386f)
+
+![DashConfig](https://github.com/user-attachments/assets/d75ad46a-be53-414f-a675-c9e05f7ef7ec)
+
+
 ## User Preferences
 
 Preferred communication style: Simple, everyday language.
