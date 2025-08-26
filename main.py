@@ -42,7 +42,6 @@ class DigitalSignageHandler(SimpleHTTPRequestHandler):
             self.serve_dashboard_proxy()
             return
         elif parsed_path.path.startswith('/demo/'):
-            print(f"Demo route matched: {parsed_path.path}")
             self.serve_demo_dashboard()
             return
         elif parsed_path.path in ['/style.css', '/app.js', '/config.js']:
@@ -121,29 +120,56 @@ class DigitalSignageHandler(SimpleHTTPRequestHandler):
             self.send_error(HTTPStatus.BAD_REQUEST, str(e))
     
     def serve_dashboard_proxy(self):
-        """Proxy dashboard requests to handle CORS and authentication"""
+        """Proxy dashboard requests to handle CORS and X-Frame-Options"""
         try:
-            # Extract dashboard URL from path
+            # Extract dashboard URL from path: /proxy/http://10.0.0.25:3001
             proxy_path = self.path[7:]  # Remove '/proxy/' prefix
             
-            # This is a simplified proxy - in production you'd want more robust handling
-            self.send_response(HTTPStatus.OK)
-            self.send_header('Content-type', 'text/html')
-            self.end_headers()
+            if not proxy_path.startswith('http'):
+                self.send_error(HTTPStatus.BAD_REQUEST, 'Invalid proxy URL')
+                return
             
-            # Return a simple message - actual proxying would require more complex implementation
-            proxy_html = f"""
-            <html>
-            <body>
-                <p>Proxy endpoint for: {proxy_path}</p>
-                <p>Note: Full proxy implementation would require additional handling for CORS and authentication.</p>
-            </body>
-            </html>
-            """
-            self.wfile.write(proxy_html.encode())
+            # Parse query parameters for authentication
+            parsed_url = urllib.parse.urlparse(self.path)
+            query_params = urllib.parse.parse_qs(parsed_url.query)
             
+            username = query_params.get('username', [None])[0]
+            password = query_params.get('password', [None])[0]
+            
+            # Create request to the target dashboard
+            req = urllib.request.Request(proxy_path)
+            
+            # Add authentication if provided
+            if username and password:
+                import base64
+                credentials = f"{username}:{password}"
+                encoded_credentials = base64.b64encode(credentials.encode()).decode()
+                req.add_header('Authorization', f'Basic {encoded_credentials}')
+            
+            # Add headers to make request look like a browser
+            req.add_header('User-Agent', 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36')
+            req.add_header('Accept', 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8')
+            
+            # Fetch the content
+            with urllib.request.urlopen(req, timeout=10) as response:
+                content = response.read()
+                content_type = response.headers.get('Content-Type', 'text/html')
+                
+                # Send response without X-Frame-Options header
+                self.send_response(HTTPStatus.OK)
+                self.send_header('Content-Type', content_type)
+                self.send_header('Access-Control-Allow-Origin', '*')
+                # Explicitly don't send X-Frame-Options to allow iframe embedding
+                self.end_headers()
+                
+                self.wfile.write(content)
+            
+        except urllib.error.HTTPError as e:
+            self.send_error(e.code, f'Dashboard server error: {e.reason}')
+        except urllib.error.URLError as e:
+            self.send_error(HTTPStatus.BAD_GATEWAY, f'Cannot reach dashboard: {e.reason}')
         except Exception as e:
-            self.send_error(HTTPStatus.INTERNAL_SERVER_ERROR, str(e))
+            self.send_error(HTTPStatus.INTERNAL_SERVER_ERROR, f'Proxy error: {str(e)}')
     
     def serve_demo_dashboard(self):
         """Serve demo dashboard for testing"""
