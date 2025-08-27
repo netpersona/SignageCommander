@@ -1,339 +1,238 @@
 #!/bin/bash
-# Digital Signage Kiosk Mode Script
-# Launches browser in fullscreen kiosk mode
+# SignageCommander Platform Kiosk Mode Script
+# Launches the digital signage platform in fullscreen kiosk mode
 
 # Configuration
 SIGNAGE_URL="http://localhost:5000"
-BROWSER_PREFERENCE="chromium"  # chromium, firefox, or auto
-DISPLAY="${DISPLAY:-:0}"
-LOG_FILE="/var/log/digital-signage-kiosk.log"
+BROWSER_CHOICE="${1:-chromium}"  # Default to chromium, allow override
+DISPLAY="${DISPLAY:-:0}"         # Default display
 
 # Colors for output
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 RED='\033[0;31m'
-NC='\033[0m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
 
 log() {
-    echo -e "${GREEN}[KIOSK]${NC} $1"
-    echo "$(date): $1" >> "$LOG_FILE" 2>/dev/null || true
+    echo -e "${BLUE}[INFO]${NC} $1"
+}
+
+success() {
+    echo -e "${GREEN}[SUCCESS]${NC} $1"
 }
 
 warning() {
     echo -e "${YELLOW}[WARNING]${NC} $1"
-    echo "$(date): WARNING: $1" >> "$LOG_FILE" 2>/dev/null || true
 }
 
 error() {
     echo -e "${RED}[ERROR]${NC} $1"
-    echo "$(date): ERROR: $1" >> "$LOG_FILE" 2>/dev/null || true
+}
+
+# Check if digital signage service is running
+check_service() {
+    log "Checking SignageCommander service..."
+    
+    if systemctl is-active --quiet digital-signage 2>/dev/null; then
+        success "Digital signage service is running"
+        return 0
+    elif pgrep -f "python3.*main.py" > /dev/null; then
+        success "Digital signage application is running"
+        return 0
+    else
+        warning "Digital signage service is not running"
+        log "Starting the service..."
+        
+        # Try to start systemd service first
+        if systemctl start digital-signage 2>/dev/null; then
+            sleep 3
+            if systemctl is-active --quiet digital-signage; then
+                success "Service started successfully"
+                return 0
+            fi
+        fi
+        
+        # If systemd service fails, try running directly
+        warning "Systemd service failed, attempting direct execution..."
+        cd /opt/digital-signage 2>/dev/null || cd "$(dirname "$0")/.."
+        
+        if [[ -f main.py ]]; then
+            python3 main.py &
+            sleep 3
+            if pgrep -f "python3.*main.py" > /dev/null; then
+                success "Application started directly"
+                return 0
+            fi
+        fi
+        
+        error "Failed to start digital signage application"
+        exit 1
+    fi
+}
+
+# Wait for service to be available
+wait_for_service() {
+    log "Waiting for service to be available at $SIGNAGE_URL..."
+    
+    for i in {1..30}; do
+        if curl -s "$SIGNAGE_URL" > /dev/null 2>&1; then
+            success "Service is available"
+            return 0
+        fi
+        sleep 1
+    done
+    
+    error "Service did not become available within 30 seconds"
     exit 1
 }
 
-check_display() {
-    if [[ -z "$DISPLAY" ]]; then
-        error "DISPLAY environment variable not set"
-    fi
+# Launch browser in kiosk mode
+launch_kiosk() {
+    log "Launching kiosk mode with $BROWSER_CHOICE browser..."
     
-    if ! xset q &>/dev/null; then
-        error "Cannot connect to X server at $DISPLAY"
-    fi
+    # Set display
+    export DISPLAY="$DISPLAY"
     
-    log "Connected to display: $DISPLAY"
-}
-
-detect_browser() {
-    local browsers=()
-    
-    # Check for available browsers
-    if command -v chromium-browser &> /dev/null; then
-        browsers+=("chromium-browser")
-    fi
-    
-    if command -v chromium &> /dev/null; then
-        browsers+=("chromium")
-    fi
-    
-    if command -v google-chrome &> /dev/null; then
-        browsers+=("google-chrome")
-    fi
-    
-    if command -v firefox &> /dev/null; then
-        browsers+=("firefox")
-    fi
-    
-    if [[ ${#browsers[@]} -eq 0 ]]; then
-        error "No supported browser found. Install chromium or firefox."
-    fi
-    
-    # Return preferred browser if available
-    case "$BROWSER_PREFERENCE" in
-        chromium)
-            for browser in "${browsers[@]}"; do
-                if [[ "$browser" =~ chromium ]]; then
-                    echo "$browser"
-                    return
-                fi
-            done
+    case "$BROWSER_CHOICE" in
+        chromium|chrome)
+            if command -v chromium-browser > /dev/null; then
+                BROWSER_CMD="chromium-browser"
+            elif command -v chromium > /dev/null; then
+                BROWSER_CMD="chromium"
+            elif command -v google-chrome > /dev/null; then
+                BROWSER_CMD="google-chrome"
+            else
+                error "Chromium/Chrome not found. Try: $0 firefox"
+                exit 1
+            fi
+            
+            log "Starting $BROWSER_CMD in kiosk mode..."
+            exec "$BROWSER_CMD" \
+                --kiosk \
+                --no-first-run \
+                --disable-infobars \
+                --disable-session-crashed-bubble \
+                --disable-translate \
+                --disable-features=TranslateUI \
+                --disable-ipc-flooding-protection \
+                --disable-background-timer-throttling \
+                --disable-renderer-backgrounding \
+                --disable-backgrounding-occluded-windows \
+                --disable-field-trial-config \
+                --force-device-scale-factor=1 \
+                --autoplay-policy=no-user-gesture-required \
+                --disable-web-security \
+                --disable-features=VizDisplayCompositor \
+                --start-fullscreen \
+                "$SIGNAGE_URL"
             ;;
+            
         firefox)
-            for browser in "${browsers[@]}"; do
-                if [[ "$browser" == "firefox" ]]; then
-                    echo "$browser"
-                    return
-                fi
-            done
-            ;;
-        auto|*)
-            # Return first available browser
-            echo "${browsers[0]}"
-            return
-            ;;
-    esac
-    
-    # Fallback to first available
-    echo "${browsers[0]}"
-}
-
-wait_for_service() {
-    log "Waiting for Digital Signage service to be ready..."
-    
-    local max_attempts=30
-    local attempt=0
-    
-    while [[ $attempt -lt $max_attempts ]]; do
-        if curl -s "$SIGNAGE_URL" > /dev/null 2>&1; then
-            log "Service is ready"
-            return 0
-        fi
-        
-        ((attempt++))
-        log "Attempt $attempt/$max_attempts: Service not ready, waiting..."
-        sleep 2
-    done
-    
-    error "Service did not become ready after $max_attempts attempts"
-}
-
-setup_environment() {
-    log "Setting up kiosk environment..."
-    
-    # Disable screen saver and power management
-    xset s off
-    xset -dpms
-    xset s noblank
-    
-    # Hide cursor after 5 seconds of inactivity
-    if command -v unclutter &> /dev/null; then
-        unclutter -idle 5 -root &
-    fi
-    
-    # Set background to black
-    if command -v xsetroot &> /dev/null; then
-        xsetroot -solid black
-    fi
-    
-    log "Environment configured"
-}
-
-launch_chromium() {
-    local browser="$1"
-    
-    log "Launching Chromium-based browser: $browser"
-    
-    # Chromium arguments for kiosk mode
-    local args=(
-        --kiosk
-        --no-first-run
-        --disable-infobars
-        --disable-features=TranslateUI
-        --disable-ipc-flooding-protection
-        --disable-background-timer-throttling
-        --disable-backgrounding-occluded-windows
-        --disable-renderer-backgrounding
-        --disable-field-trial-config
-        --disable-back-forward-cache
-        --disable-web-security
-        --disable-features=VizDisplayCompositor
-        --start-fullscreen
-        --window-position=0,0
-        --window-size=1920,1080
-        --no-sandbox
-        --disable-dev-shm-usage
-        --disable-gpu-sandbox
-        --ignore-certificate-errors
-        --ignore-ssl-errors
-        --ignore-certificate-errors-spki-list
-        --allow-running-insecure-content
-        --autoplay-policy=no-user-gesture-required
-        --user-data-dir=/tmp/signage-browser
-        "$SIGNAGE_URL"
-    )
-    
-    # Clean up any existing browser data
-    rm -rf /tmp/signage-browser
-    
-    # Launch browser
-    exec "$browser" "${args[@]}" &
-    local browser_pid=$!
-    
-    log "Browser launched with PID: $browser_pid"
-    return $browser_pid
-}
-
-launch_firefox() {
-    local browser="$1"
-    
-    log "Launching Firefox: $browser"
-    
-    # Create Firefox profile for kiosk mode
-    local profile_dir="/tmp/signage-firefox-profile"
-    rm -rf "$profile_dir"
-    mkdir -p "$profile_dir"
-    
-    # Firefox preferences for kiosk mode
-    cat > "$profile_dir/user.js" << EOF
-user_pref("browser.dom.window.dump.enabled", true);
-user_pref("browser.fullscreen.autohide", true);
+            if ! command -v firefox > /dev/null; then
+                error "Firefox not found. Try: $0 chromium"
+                exit 1
+            fi
+            
+            log "Starting Firefox in kiosk mode..."
+            
+            # Create temporary Firefox profile for kiosk mode
+            PROFILE_DIR="/tmp/firefox-kiosk-$$"
+            mkdir -p "$PROFILE_DIR"
+            
+            # Configure Firefox for kiosk mode
+            cat > "$PROFILE_DIR/user.js" << EOF
 user_pref("browser.startup.homepage", "$SIGNAGE_URL");
 user_pref("startup.homepage_welcome_url", "");
-user_pref("browser.sessionstore.resume_from_crash", false);
-user_pref("browser.shell.checkDefaultBrowser", false);
-user_pref("browser.rights.3.shown", true);
-user_pref("devtools.toolbox.host", "bottom");
-user_pref("toolkit.telemetry.reportingpolicy.firstRun", false);
-user_pref("browser.tabs.warnOnClose", false);
-user_pref("browser.tabs.warnOnCloseOtherTabs", false);
-user_pref("browser.tabs.warnOnOpen", false);
+user_pref("browser.startup.page", 1);
+user_pref("toolkit.legacyUserProfileCustomizations.stylesheets", true);
+user_pref("full-screen-api.approval-required", false);
 user_pref("security.tls.insecure_fallback_hosts", "localhost");
-user_pref("security.mixed_content.upgrade_display_content", false);
+user_pref("browser.dom.window.dump.enabled", true);
 user_pref("media.autoplay.default", 0);
+user_pref("media.autoplay.allow-extension-background-pages", true);
+user_pref("media.autoplay.blocking_policy", 0);
 EOF
-    
-    # Firefox arguments
-    local args=(
-        -profile "$profile_dir"
-        -no-remote
-        -new-instance
-        "$SIGNAGE_URL"
-    )
-    
-    # Launch Firefox
-    exec "$browser" "${args[@]}" &
-    local browser_pid=$!
-    
-    # Wait a moment then enter fullscreen
-    sleep 3
-    xdotool key F11
-    
-    log "Firefox launched with PID: $browser_pid"
-    return $browser_pid
+            
+            # Create chrome directory for CSS
+            mkdir -p "$PROFILE_DIR/chrome"
+            cat > "$PROFILE_DIR/chrome/userChrome.css" << EOF
+@namespace url("http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul");
+#nav-bar, #TabsToolbar, #PersonalToolbar { visibility: collapse !important; }
+EOF
+            
+            exec firefox \
+                --profile "$PROFILE_DIR" \
+                --new-instance \
+                --kiosk \
+                "$SIGNAGE_URL"
+            ;;
+            
+        *)
+            error "Unsupported browser: $BROWSER_CHOICE"
+            error "Supported browsers: chromium, chrome, firefox"
+            exit 1
+            ;;
+    esac
 }
 
-monitor_browser() {
-    local browser_pid=$1
-    
-    log "Monitoring browser process (PID: $browser_pid)"
-    
-    while kill -0 "$browser_pid" 2>/dev/null; do
-        sleep 5
-    done
-    
-    warning "Browser process terminated"
-}
-
+# Cleanup function
 cleanup() {
-    log "Cleaning up kiosk session..."
+    log "Cleaning up..."
     
-    # Kill any remaining browser processes
-    pkill -f "chromium.*$SIGNAGE_URL" 2>/dev/null || true
-    pkill -f "firefox.*signage-firefox-profile" 2>/dev/null || true
-    
-    # Clean up temp directories
-    rm -rf /tmp/signage-browser /tmp/signage-firefox-profile
-    
-    # Restore screen saver
-    xset s on
-    xset +dpms
-    
-    log "Cleanup completed"
-}
-
-main() {
-    log "Starting Digital Signage Kiosk Mode..."
-    
-    # Set up signal handlers
-    trap cleanup EXIT
-    trap 'log "Received interrupt signal"; exit 130' INT TERM
-    
-    # Check prerequisites
-    check_display
-    
-    # Wait for service to be ready
-    wait_for_service
-    
-    # Set up kiosk environment
-    setup_environment
-    
-    # Detect and launch browser
-    local browser
-    browser=$(detect_browser)
-    log "Selected browser: $browser"
-    
-    local browser_pid
-    if [[ "$browser" =~ chromium|chrome ]]; then
-        launch_chromium "$browser"
-        browser_pid=$!
-    elif [[ "$browser" == "firefox" ]]; then
-        launch_firefox "$browser"
-        browser_pid=$!
-    else
-        error "Unsupported browser: $browser"
+    # Remove temporary Firefox profile if it exists
+    if [[ -n "$PROFILE_DIR" && -d "$PROFILE_DIR" ]]; then
+        rm -rf "$PROFILE_DIR"
     fi
     
-    # Monitor browser
-    monitor_browser "$browser_pid"
+    # Kill browser processes if needed
+    pkill -f "$BROWSER_CHOICE" 2>/dev/null || true
     
-    # If we get here, browser exited
-    warning "Kiosk mode ended"
+    exit 0
+}
+
+# Set trap for cleanup
+trap cleanup EXIT INT TERM
+
+# Show usage
+show_usage() {
+    echo "SignageCommander Kiosk Mode Launcher"
+    echo
+    echo "Usage: $0 [browser]"
+    echo
+    echo "Browsers:"
+    echo "  chromium  - Use Chromium browser (default)"
+    echo "  firefox   - Use Firefox browser"
+    echo
+    echo "Examples:"
+    echo "  $0           # Use default browser (chromium)"
+    echo "  $0 firefox   # Use Firefox browser"
+    echo
+    echo "Environment Variables:"
+    echo "  DISPLAY      - X11 display to use (default: :0)"
+    echo
+}
+
+# Main execution
+main() {
+    log "Starting SignageCommander Kiosk Mode..."
+    log "Target URL: $SIGNAGE_URL"
+    log "Browser: $BROWSER_CHOICE"
+    log "Display: $DISPLAY"
+    echo
+    
+    check_service
+    wait_for_service
+    launch_kiosk
 }
 
 # Handle script arguments
-case "${1:-start}" in
-    start)
-        main
-        ;;
-    stop)
-        log "Stopping kiosk mode..."
-        cleanup
-        log "Kiosk mode stopped"
-        ;;
-    restart)
-        "$0" stop
-        sleep 2
-        "$0" start
-        ;;
-    status)
-        if pgrep -f "chromium.*$SIGNAGE_URL" > /dev/null || pgrep -f "firefox.*signage-firefox-profile" > /dev/null; then
-            log "Kiosk mode is running"
-            exit 0
-        else
-            log "Kiosk mode is not running"
-            exit 1
-        fi
+case "${1:-}" in
+    -h|--help|help)
+        show_usage
+        exit 0
         ;;
     *)
-        echo "Usage: $0 [start|stop|restart|status]"
-        echo
-        echo "Environment variables:"
-        echo "  SIGNAGE_URL      - URL to display (default: http://localhost:5000)"
-        echo "  BROWSER_PREFERENCE - Browser to use: chromium, firefox, or auto (default: chromium)"
-        echo "  DISPLAY          - X display to use (default: :0)"
-        echo
-        echo "Examples:"
-        echo "  $0 start                    # Start kiosk mode"
-        echo "  SIGNAGE_URL=http://192.168.1.100:5000 $0 start"
-        echo "  BROWSER_PREFERENCE=firefox $0 start"
-        exit 1
+        main
         ;;
 esac

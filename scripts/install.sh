@@ -1,5 +1,5 @@
 #!/bin/bash
-# Digital Signage Platform Installation Script
+# SignageCommander Platform Installation Script
 # For RHEL 8 / CentOS 8 / Rocky Linux 8
 
 set -e
@@ -102,7 +102,7 @@ create_user() {
 }
 
 install_application() {
-    log "Installing Digital Signage Platform..."
+    log "Installing SignageCommander Platform..."
     
     # Create installation directory
     mkdir -p "$INSTALL_DIR"
@@ -203,7 +203,7 @@ configure_selinux() {
 }
 
 start_service() {
-    log "Starting Digital Signage service..."
+    log "Starting SignageCommander service..."
     
     systemctl start "$SERVICE_NAME"
     
@@ -219,7 +219,7 @@ start_service() {
 
 show_completion_message() {
     echo
-    success "Digital Signage Platform installation completed!"
+    success "SignageCommander Platform installation completed!"
     echo
     echo "Service Information:"
     echo "  - Service name: $SERVICE_NAME"
@@ -247,7 +247,7 @@ show_completion_message() {
 
 # Main installation flow
 main() {
-    log "Starting Digital Signage Platform installation..."
+    log "Starting SignageCommander Platform installation..."
     
     check_root
     check_system
@@ -267,7 +267,7 @@ case "${1:-install}" in
         main
         ;;
     uninstall)
-        log "Uninstalling Digital Signage Platform..."
+        log "Uninstalling SignageCommander Platform..."
         systemctl stop "$SERVICE_NAME" 2>/dev/null || true
         systemctl disable "$SERVICE_NAME" 2>/dev/null || true
         rm -f "/etc/systemd/system/$SERVICE_NAME.service"

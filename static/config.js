@@ -139,7 +139,7 @@ class ConfigurationManager {
         if (dashboardData) {
             clone.querySelector('.dashboard-name').value = dashboardData.name || '';
             clone.querySelector('.dashboard-url').value = dashboardData.url || '';
-            clone.querySelector('.dashboard-type').value = dashboardData.type || 'uptimekuma';
+            clone.querySelector('.dashboard-type').value = dashboardData.type || '';
             clone.querySelector('.dashboard-username').value = dashboardData.username || '';
             clone.querySelector('.dashboard-password').value = dashboardData.password || '';
             clone.querySelector('.dashboard-enabled').checked = dashboardData.enabled !== false;
