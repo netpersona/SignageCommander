@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Grafana - System Monitoring Dashboard (Demo)</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #111217;
+            color: #d9d9d9;
+            min-height: 100vh;
+            transition: background 0.3s ease, color 0.3s ease;
+        }
+        
+        /* Light Mode Override - for when dark mode is disabled */
+        body.light-mode {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #2d3748;
+        }
+        
+        body.light-mode .grafana-header {
+            background: #ffffff;
+            border-bottom: 1px solid #e2e8f0;
+            color: #2d3748;
+        }
+        
+        body.light-mode .dashboard-title {
+            color: #2d3748;
+        }
+        
+        body.light-mode .panel {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+        }
+        
+        body.light-mode .panel-header {
+            background: #f7fafc;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        
+        body.light-mode .panel-title {
+            color: #2d3748;
+        }
+        
+        body.light-mode .metric-value {
+            color: #2d3748;
+        }
+        
+        body.light-mode .gauge-center {
+            background: #ffffff;
+        }
+        
+        body.light-mode .status-item {
+            background: #f7fafc;
+            color: #2d3748;
+        }
+        
+        body.light-mode .status-name {
+            color: #2d3748;
+        }
+        
+        body.light-mode .table th {
+            background: #f7fafc;
+            color: #2d3748;
+        }
+        
+        body.light-mode .table tr:hover {
+            background: #edf2f7;
+        }
+        
+        body.light-mode .chart-container {
+            background: linear-gradient(145deg, #f7fafc, #edf2f7);
+        }
+        
+        .grafana-header {
+            background: #1f1f23;
+            border-bottom: 1px solid #404145;
+            padding: 12px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .dashboard-title {
+            font-size: 1.5rem;
+            font-weight: 500;
+            color: #ffffff;
+        }
+        
+        .dashboard-meta {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            font-size: 0.85rem;
+            color: #8e8e8e;
+        }
+        
+        .demo-banner {
+            background: linear-gradient(90deg, #ff6b35, #f7931e);
+            color: white;
+            padding: 8px 20px;
+            text-align: center;
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+        
+        .container {
+            padding: 20px;
+        }
+        
+        .panels-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .full-width {
+            grid-column: 1 / -1;
+        }
+        
+        .half-width {
+            grid-column: span 2;
+        }
+        
+        .panel {
+            background: #1f1f23;
+            border: 1px solid #404145;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        
+        .panel-header {
+            background: #262629;
+            padding: 12px 16px;
+            border-bottom: 1px solid #404145;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .panel-title {
+            font-size: 1rem;
+            font-weight: 500;
+            color: #ffffff;
+        }
+        
+        .panel-options {
+            display: flex;
+            gap: 8px;
+            font-size: 0.8rem;
+            color: #8e8e8e;
+        }
+        
+        .panel-content {
+            padding: 20px;
+            height: 250px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+        
+        .metric-value {
+            font-size: 3rem;
+            font-weight: 300;
+            text-align: center;
+        }
+        
+        .metric-unit {
+            font-size: 1.2rem;
+            color: #8e8e8e;
+            margin-left: 8px;
+        }
+        
+        .metric-trend {
+            display: block;
+            font-size: 0.9rem;
+            margin-top: 8px;
+            padding: 4px 8px;
+            border-radius: 4px;
+        }
+        
+        .trend-up {
+            color: #e24d42;
+            background: rgba(226, 77, 66, 0.1);
+        }
+        
+        .trend-down {
+            color: #73bf69;
+            background: rgba(115, 191, 105, 0.1);
+        }
+        
+        .trend-neutral {
+            color: #fade2a;
+            background: rgba(250, 222, 42, 0.1);
+        }
+        
+        .chart-container {
+            width: 100%;
+            height: 200px;
+            background: linear-gradient(145deg, #1a1a1e, #25252a);
+            border-radius: 4px;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .chart-line {
+            position: absolute;
+            bottom: 40px;
+            left: 30px;
+            right: 30px;
+            height: 120px;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 120"><path d="M0,80 Q100,60 200,70 T400,50" fill="none" stroke="%2373bf69" stroke-width="2" opacity="0.8"/><path d="M0,80 Q100,60 200,70 T400,50 L400,120 L0,120 Z" fill="url(%23gradient)"/><defs><linearGradient id="gradient" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" style="stop-color:%2373bf69;stop-opacity:0.3"/><stop offset="100%" style="stop-color:%2373bf69;stop-opacity:0.1"/></linearGradient></defs></svg>') no-repeat center;
+            background-size: cover;
+        }
+        
+        .chart-axes {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            top: 0;
+            pointer-events: none;
+        }
+        
+        .chart-axis {
+            position: absolute;
+            color: #606060;
+            font-size: 11px;
+        }
+        
+        .y-axis {
+            left: 5px;
+            top: 20px;
+        }
+        
+        .x-axis {
+            bottom: 5px;
+            right: 30px;
+        }
+        
+        .gauge {
+            width: 120px;
+            height: 120px;
+            border: 8px solid #404145;
+            border-radius: 50%;
+            position: relative;
+            margin: 0 auto;
+        }
+        
+        .gauge::before {
+            content: '';
+            position: absolute;
+            top: -8px;
+            left: -8px;
+            right: -8px;
+            bottom: -8px;
+            border-radius: 50%;
+            background: conic-gradient(from 0deg, #73bf69 0deg 216deg, #404145 216deg 360deg);
+            animation: gaugeRotate 3s ease-in-out infinite alternate;
+        }
+        
+        @keyframes gaugeRotate {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(10deg); }
+        }
+        
+        .gauge-center {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: #1f1f23;
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            z-index: 1;
+        }
+        
+        .gauge-value {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #73bf69;
+        }
+        
+        .gauge-label {
+            font-size: 0.7rem;
+            color: #8e8e8e;
+            margin-top: 2px;
+        }
+        
+        .status-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            align-items: stretch;
+            height: 100%;
+        }
+        
+        .status-item {
+            background: #262629;
+            padding: 16px 20px;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            min-height: 70px;
+            font-size: 1rem;
+            flex: 1 1 calc(50% - 6px);
+            width: 100%;
+        }
+        
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+        
+        .status-online { background: #73bf69; }
+        .status-warning { background: #fade2a; }
+        .status-error { background: #e24d42; }
+        
+        .status-info {
+            flex: 1;
+        }
+        
+        .status-name {
+            font-weight: 500;
+            margin-bottom: 4px;
+        }
+        
+        .status-detail {
+            font-size: 0.85rem;
+            color: #8e8e8e;
+        }
+        
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+        }
+        
+        .table th,
+        .table td {
+            text-align: left;
+            padding: 12px 16px;
+            border-bottom: 1px solid #404145;
+        }
+        
+        .table th {
+            background: #262629;
+            font-weight: 500;
+            color: #ffffff;
+        }
+        
+        .table tr:hover {
+            background: #25252a;
+        }
+        
+        .badge {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+        
+        .badge-success { background: #73bf69; color: #ffffff; }
+        .badge-warning { background: #fade2a; color: #1f1f23; }
+        .badge-error { background: #e24d42; color: #ffffff; }
+        
+        @media (max-width: 768px) {
+            .panels-grid {
+                grid-template-columns: 1fr;
+            }
+            .half-width {
+                grid-column: span 1;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="demo-banner">
+        <strong>Demo Dashboard</strong> - This is a simulated Grafana interface for SignageCommander demonstration
+    </div>
+    
+    <div class="grafana-header">
+        <div class="dashboard-title">System Monitoring Dashboard</div>
+        <div class="dashboard-meta">
+            <span>Last updated: <span id="last-update">Loading...</span></span>
+            <span>Refresh: 5s</span>
+        </div>
+    </div>
+    
+    <div class="container">
+        <!-- Top Row Metrics -->
+        <div class="panels-grid">
+            <div class="panel">
+                <div class="panel-header">
+                    <div class="panel-title">CPU Usage</div>
+                    <div class="panel-options">avg</div>
+                </div>
+                <div class="panel-content">
+                    <div>
+                        <div class="metric-value" id="cpu-value">67.2<span class="metric-unit">%</span></div>
+                        <div class="metric-trend trend-up" id="cpu-trend">↑ 5.3% from 1h ago</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="panel">
+                <div class="panel-header">
+                    <div class="panel-title">Memory Usage</div>
+                    <div class="panel-options">current</div>
+                </div>
+                <div class="panel-content">
+                    <div>
+                        <div class="metric-value" id="memory-value">8.4<span class="metric-unit">GB</span></div>
+                        <div class="metric-trend trend-neutral">↕ 0.2GB from 1h ago</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="panel">
+                <div class="panel-header">
+                    <div class="panel-title">Disk Usage</div>
+                    <div class="panel-options">%</div>
+                </div>
+                <div class="panel-content">
+                    <div class="gauge">
+                        <div class="gauge-center">
+                            <div class="gauge-value" id="disk-value">60%</div>
+                            <div class="gauge-label">Used</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="panel">
+                <div class="panel-header">
+                    <div class="panel-title">Network I/O</div>
+                    <div class="panel-options">MB/s</div>
+                </div>
+                <div class="panel-content">
+                    <div>
+                        <div class="metric-value" id="network-value">24.7<span class="metric-unit">MB/s</span></div>
+                        <div class="metric-trend trend-down">↓ 12% from 1h ago</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Chart Panel -->
+        <div class="panels-grid">
+            <div class="panel full-width">
+                <div class="panel-header">
+                    <div class="panel-title">CPU Usage Over Time</div>
+                    <div class="panel-options">Last 6 hours</div>
+                </div>
+                <div class="panel-content">
+                    <div class="chart-container">
+                        <div class="chart-line"></div>
+                        <div class="chart-axes">
+                            <div class="chart-axis y-axis">100%</div>
+                            <div class="chart-axis y-axis" style="top: 60px;">50%</div>
+                            <div class="chart-axis y-axis" style="top: 100px;">0%</div>
+                            <div class="chart-axis x-axis">now</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Service Status -->
+        <div class="panels-grid">
+            <div class="panel half-width">
+                <div class="panel-header">
+                    <div class="panel-title">Service Status</div>
+                    <div class="panel-options">6 services</div>
+                </div>
+                <div class="panel-content">
+                    <div class="status-grid">
+                        <div class="status-item">
+                            <div class="status-dot status-online"></div>
+                            <div class="status-info">
+                                <div class="status-name">Web Server</div>
+                                <div class="status-detail">nginx - Running</div>
+                            </div>
+                        </div>
+                        <div class="status-item">
+                            <div class="status-dot status-online"></div>
+                            <div class="status-info">
+                                <div class="status-name">Database</div>
+                                <div class="status-detail">PostgreSQL - Active</div>
+                            </div>
+                        </div>
+                        <div class="status-item">
+                            <div class="status-dot status-warning"></div>
+                            <div class="status-info">
+                                <div class="status-name">Redis Cache</div>
+                                <div class="status-detail">High memory usage</div>
+                            </div>
+                        </div>
+                        <div class="status-item">
+                            <div class="status-dot status-online"></div>
+                            <div class="status-info">
+                                <div class="status-name">Load Balancer</div>
+                                <div class="status-detail">HAProxy - Healthy</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Top Processes -->
+            <div class="panel half-width">
+                <div class="panel-header">
+                    <div class="panel-title">Top Processes</div>
+                    <div class="panel-options">by CPU</div>
+                </div>
+                <div class="panel-content" style="height: auto; padding: 0;">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Process</th>
+                                <th>CPU %</th>
+                                <th>Memory</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>nginx</td>
+                                <td>15.2%</td>
+                                <td>245 MB</td>
+                                <td><span class="badge badge-success">Running</span></td>
+                            </tr>
+                            <tr>
+                                <td>postgres</td>
+                                <td>12.8%</td>
+                                <td>1.2 GB</td>
+                                <td><span class="badge badge-success">Running</span></td>
+                            </tr>
+                            <tr>
+                                <td>redis-server</td>
+                                <td>8.4%</td>
+                                <td>156 MB</td>
+                                <td><span class="badge badge-warning">High Load</span></td>
+                            </tr>
+                            <tr>
+                                <td>node</td>
+                                <td>6.1%</td>
+                                <td>324 MB</td>
+                                <td><span class="badge badge-success">Running</span></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Update timestamps and add some dynamic behavior
+        function updateTimestamp() {
+            const now = new Date();
+            document.getElementById('last-update').textContent = now.toLocaleTimeString();
+        }
+        
+        function animateMetrics() {
+            // Simulate changing metrics
+            const cpuElement = document.getElementById('cpu-value');
+            const memoryElement = document.getElementById('memory-value');
+            const diskElement = document.getElementById('disk-value');
+            const networkElement = document.getElementById('network-value');
+            
+            // CPU variation
+            const baseCpu = 67.2;
+            const cpuVariation = (Math.random() - 0.5) * 10;
+            const newCpu = Math.max(0, Math.min(100, baseCpu + cpuVariation));
+            cpuElement.innerHTML = newCpu.toFixed(1) + '<span class="metric-unit">%</span>';
+            
+            // Memory variation  
+            const baseMemory = 8.4;
+            const memoryVariation = (Math.random() - 0.5) * 1;
+            const newMemory = Math.max(0, baseMemory + memoryVariation);
+            memoryElement.innerHTML = newMemory.toFixed(1) + '<span class="metric-unit">GB</span>';
+            
+            // Disk gauge rotation
+            const diskValue = 60 + (Math.random() - 0.5) * 5;
+            diskElement.textContent = Math.round(diskValue) + '%';
+            
+            // Network variation
+            const baseNetwork = 24.7;
+            const networkVariation = (Math.random() - 0.5) * 8;
+            const newNetwork = Math.max(0, baseNetwork + networkVariation);
+            networkElement.innerHTML = newNetwork.toFixed(1) + '<span class="metric-unit">MB/s</span>';
+        }
+        
+        // Listen for dark mode messages from parent window
+        window.addEventListener('message', (event) => {
+            if (event.data && event.data.type === 'darkMode') {
+                if (event.data.enabled) {
+                    document.body.classList.remove('light-mode');
+                } else {
+                    document.body.classList.add('light-mode');
+                }
+            }
+        });
+        
+        // Send ready message to parent if in iframe
+        if (window.parent && window.parent !== window) {
+            window.parent.postMessage({ type: 'iframeReady', source: 'grafana-demo' }, '*');
+        }
+        
+        // Initialize
+        updateTimestamp();
+        setInterval(updateTimestamp, 5000);
+        setInterval(animateMetrics, 3000);
+        
+        // Initial animation delay
+        setTimeout(animateMetrics, 1000);
+    </script>
+</body>
+</html>

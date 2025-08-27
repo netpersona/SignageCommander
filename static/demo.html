@@ -13,10 +13,48 @@
         
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background-image: linear-gradient(to top, #30cfd0 0%, #330867 100%);
             color: #2d3748;
             min-height: 100vh;
             padding: 20px;
+            transition: background 0.3s ease, color 0.3s ease;
+        }
+        
+        /* Dark Mode Styles */
+        body.dark-mode {
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            color: #f8fafc;
+        }
+        
+        body.dark-mode .status-card {
+            background: #334155;
+            color: #f8fafc;
+        }
+        
+        body.dark-mode .service-name {
+            color: #f8fafc;
+        }
+        
+        body.dark-mode .stat-value {
+            color: #f8fafc;
+        }
+        
+        body.dark-mode .service-stats {
+            border-top: 1px solid #475569;
+        }
+        
+        body.dark-mode .overall-status {
+            background: #334155;
+            color: #f8fafc;
+        }
+        
+        body.dark-mode .overall-text {
+            color: #f8fafc;
+        }
+        
+        body.dark-mode .demo-banner {
+            background: rgba(51, 65, 85, 0.8);
+            border: 1px solid rgba(71, 85, 105, 0.5);
         }
         
         .container {
@@ -28,6 +66,10 @@
             text-align: center;
             margin-bottom: 40px;
             color: white;
+        }
+        
+        body:not(.dark-mode) .header {
+            color: #2d3748;
         }
         
         .header h1 {
@@ -170,6 +212,10 @@
             font-size: 0.9rem;
         }
         
+        body:not(.dark-mode) .last-update {
+            color: #2d3748;
+        }
+        
         .demo-banner {
             background: rgba(255, 255, 255, 0.1);
             color: white;
@@ -179,12 +225,18 @@
             text-align: center;
             border: 1px solid rgba(255, 255, 255, 0.2);
         }
+        
+        body:not(.dark-mode) .demo-banner {
+            background: rgba(45, 55, 72, 0.1);
+            color: #2d3748;
+            border: 1px solid rgba(45, 55, 72, 0.2);
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="demo-banner">
-            <strong>Demo Dashboard</strong> - This is a simulated UptimeKuma interface for Digital Signage demonstration
+            <strong>Demo Dashboard</strong> - This is a simulated UptimeKuma interface for SignageCommander demonstration
         </div>
         
         <div class="header">
@@ -364,6 +416,22 @@
         
         updateTime();
         setInterval(updateTime, 1000);
+        
+        // Listen for dark mode messages from parent window
+        window.addEventListener('message', (event) => {
+            if (event.data && event.data.type === 'darkMode') {
+                if (event.data.enabled) {
+                    document.body.classList.add('dark-mode');
+                } else {
+                    document.body.classList.remove('dark-mode');
+                }
+            }
+        });
+        
+        // Send ready message to parent if in iframe
+        if (window.parent && window.parent !== window) {
+            window.parent.postMessage({ type: 'iframeReady', source: 'uptimekuma-demo' }, '*');
+        }
         
         // Add some dynamic behavior to make it feel more realistic
         setInterval(() => {
