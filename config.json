@@ -3,26 +3,22 @@
     {
       "name": "UptimeKuma Demo",
       "url": "/static/demo.html",
-      "type": "uptimekuma",
+      "type": "",
       "username": "",
       "password": "",
-      "enabled": true
+      "enabled": true,
+      "use_proxy": false,
+      "dark_mode": true
     },
     {
-      "name": "UptimeKuma Status (Example)",
-      "url": "http://localhost:3001",
-      "type": "uptimekuma",
-      "username": "",
-      "password": "",
-      "enabled": false
-    },
-    {
-      "name": "Grafana Monitoring (Example)",
-      "url": "http://localhost:3000",
+      "name": "Grafana Demo",
+      "url": "/static/grafana-demo.html",
       "type": "grafana",
       "username": "",
       "password": "",
-      "enabled": false
+      "enabled": true,
+      "use_proxy": false,
+      "dark_mode": true
     }
   ],
   "settings": {

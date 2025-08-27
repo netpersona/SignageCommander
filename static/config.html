@@ -3,15 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Digital Signage - Configuration</title>
-    <link rel="stylesheet" href="style.css">
+    <title>SignageCommander - Configuration</title>
+    <link rel="stylesheet" href="style.css?v=1756302200">
 </head>
 <body>
     <div id="config-app">
         <!-- Header -->
         <header class="config-header">
             <div class="header-content">
-                <h1>Digital Signage Configuration</h1>
+                <h1>SignageCommander Configuration</h1>
                 <div class="header-actions">
                     <a href="/" class="btn btn-secondary">← Back to Dashboard</a>
                     <button id="save-config" class="btn btn-primary">Save Configuration</button>
@@ -96,6 +96,7 @@
                         </label>
                         <small>Allow keyboard control of dashboard navigation</small>
                     </div>
+                    
                 </div>
             </section>
 
@@ -173,6 +174,18 @@
                         Enable this dashboard
                     </label>
                     
+                    <label class="checkbox-label">
+                        <input type="checkbox" class="dashboard-use-proxy">
+                        <span class="checkmark"></span>
+                        Use proxy for this dashboard
+                    </label>
+                    
+                    <label class="checkbox-label">
+                        <input type="checkbox" class="dashboard-dark-mode">
+                        <span class="checkmark"></span>
+                        Dark theme for this dashboard
+                    </label>
+                    
                     <button type="button" class="btn btn-test">Test Connection</button>
                 </div>
                 
@@ -181,6 +194,6 @@
         </div>
     </template>
 
-    <script src="config.js"></script>
+    <script src="config.js?v=1756302400"></script>
 </body>
 </html>

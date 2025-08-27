@@ -1,6 +1,6 @@
 [Unit]
-Description=Digital Signage Platform
-Documentation=https://github.com/example/digital-signage
+Description=SignageCommander
+Documentation=https://github.com/netpersona/SignageCommander
 After=network.target network-online.target
 Wants=network-online.target
 

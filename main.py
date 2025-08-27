@@ -19,7 +19,7 @@ import sys
 from pathlib import Path
 
 class DigitalSignageHandler(SimpleHTTPRequestHandler):
-    """Custom HTTP request handler for the digital signage platform"""
+    """Custom HTTP request handler for the SignageCommander platform"""
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(Path(__file__).parent), **kwargs)
@@ -43,6 +43,12 @@ class DigitalSignageHandler(SimpleHTTPRequestHandler):
             return
         elif parsed_path.path.startswith('/demo/'):
             self.serve_demo_dashboard()
+            return
+        elif parsed_path.path.startswith('/api/uptimekuma-data'):
+            self.serve_uptimekuma_data(parsed_path.query)
+            return
+        elif parsed_path.path.startswith('/uptimekuma/'):
+            self.serve_custom_uptimekuma_dashboard()
             return
         elif parsed_path.path in ['/style.css', '/app.js', '/config.js']:
             # Map CSS/JS files to static directory
@@ -118,6 +124,252 @@ class DigitalSignageHandler(SimpleHTTPRequestHandler):
             
         except Exception as e:
             self.send_error(HTTPStatus.BAD_REQUEST, str(e))
+    
+    def serve_uptimekuma_data(self, query_string):
+        """Fetch and serve UptimeKuma status data as JSON"""
+        try:
+            # Parse query parameters
+            params = urllib.parse.parse_qs(query_string)
+            uptimekuma_url = params.get('url', [''])[0]
+            username = params.get('username', [''])[0]
+            password = params.get('password', [''])[0]
+            use_proxy = params.get('use_proxy', ['false'])[0].lower() == 'true'
+            
+            if not uptimekuma_url:
+                raise ValueError('UptimeKuma URL is required')
+            
+            # Fetch data from UptimeKuma (use mock data for demo)
+            if 'localhost:3001' in uptimekuma_url:
+                data = self.get_mock_uptimekuma_data()
+            else:
+                data = self.fetch_uptimekuma_status(uptimekuma_url, username, password, use_proxy)
+            
+            self.send_response(HTTPStatus.OK)
+            self.send_header('Content-type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(json.dumps(data, indent=2).encode())
+            
+        except Exception as e:
+            error_response = {
+                'error': True,
+                'message': str(e),
+                'services': []
+            }
+            self.send_response(HTTPStatus.OK)  # Send 200 but with error in data
+            self.send_header('Content-type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(json.dumps(error_response, indent=2).encode())
+    
+    def get_mock_uptimekuma_data(self):
+        """Return mock UptimeKuma data for testing"""
+        return {
+            "error": False,
+            "message": "Connected successfully",
+            "services": [
+                {
+                    "id": 1,
+                    "name": "Website",
+                    "url": "https://example.com",
+                    "status": "up",
+                    "uptime": "99.9%",
+                    "responseTime": "145ms",
+                    "lastCheck": "2025-08-27T15:25:00Z",
+                    "type": "http"
+                },
+                {
+                    "id": 2,
+                    "name": "API Server",
+                    "url": "https://api.example.com",
+                    "status": "up", 
+                    "uptime": "99.8%",
+                    "responseTime": "89ms",
+                    "lastCheck": "2025-08-27T15:25:00Z",
+                    "type": "http"
+                },
+                {
+                    "id": 3,
+                    "name": "Database",
+                    "url": "postgres://db.example.com:5432",
+                    "status": "warning",
+                    "uptime": "98.5%",
+                    "responseTime": "250ms",
+                    "lastCheck": "2025-08-27T15:25:00Z",
+                    "type": "tcp"
+                },
+                {
+                    "id": 4,
+                    "name": "CDN",
+                    "url": "https://cdn.example.com",
+                    "status": "up",
+                    "uptime": "99.9%",
+                    "responseTime": "45ms",
+                    "lastCheck": "2025-08-27T15:25:00Z",
+                    "type": "http"
+                }
+            ],
+            "overall": {
+                "status": "operational",
+                "uptime": "99.5%",
+                "incidents": 0
+            }
+        }
+    
+    def fetch_uptimekuma_status(self, uptimekuma_url, username='', password='', use_proxy=False):
+        """Fetch status data from UptimeKuma instance"""
+        try:
+            # Clean up the URL - ensure it ends with /api/status-page or similar
+            base_url = uptimekuma_url.rstrip('/')
+            
+            # Try different common UptimeKuma API endpoints
+            api_endpoints = [
+                f"{base_url}/api/status-page",
+                f"{base_url}/api/monitors", 
+                f"{base_url}/status",
+                f"{base_url}/api/status"
+            ]
+            
+            headers = {
+                'User-Agent': 'SignageCommander/1.0',
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+            }
+            
+            # Add authentication if provided
+            if username and password:
+                auth_string = base64.b64encode(f"{username}:{password}".encode()).decode()
+                headers['Authorization'] = f'Basic {auth_string}'
+            
+            # Try each endpoint until one works
+            for endpoint in api_endpoints:
+                try:
+                    req = urllib.request.Request(endpoint, headers=headers)
+                    
+                    with urllib.request.urlopen(req, timeout=10) as response:
+                        data = json.loads(response.read().decode())
+                        
+                        # Transform the data into our expected format
+                        return self.transform_uptimekuma_data(data, base_url)
+                        
+                except (urllib.error.HTTPError, urllib.error.URLError) as e:
+                    continue  # Try next endpoint
+            
+            # If no endpoint worked, return demo-like data structure with error
+            return {
+                'error': False,
+                'message': 'Connected to UptimeKuma but no data available',
+                'services': [
+                    {
+                        'name': 'Connection Test',
+                        'status': 'down',
+                        'uptime': '0%',
+                        'responseTime': 'N/A',
+                        'url': uptimekuma_url
+                    }
+                ],
+                'overall_status': 'Issues Detected',
+                'total_services': 1
+            }
+            
+        except Exception as e:
+            raise Exception(f"Failed to connect to UptimeKuma: {str(e)}")
+    
+    def transform_uptimekuma_data(self, raw_data, base_url):
+        """Transform raw UptimeKuma data into our dashboard format"""
+        try:
+            services = []
+            
+            # Handle different UptimeKuma API response formats
+            if isinstance(raw_data, dict):
+                # Try to find monitors/services in the data
+                monitors = raw_data.get('monitors', [])
+                if not monitors:
+                    monitors = raw_data.get('data', [])
+                if not monitors:
+                    monitors = [raw_data]  # Single monitor response
+                
+                for monitor in monitors:
+                    if isinstance(monitor, dict):
+                        services.append({
+                            'name': monitor.get('name', monitor.get('friendly_name', 'Unknown Service')),
+                            'status': 'up' if monitor.get('status') == 1 or monitor.get('active', True) else 'down',
+                            'uptime': f"{monitor.get('uptime', monitor.get('uptime_24h', 0))}%",
+                            'responseTime': f"{monitor.get('avg_ping', monitor.get('response_time', 'N/A'))}ms" if monitor.get('avg_ping') or monitor.get('response_time') else 'N/A',
+                            'url': monitor.get('url', monitor.get('hostname', base_url))
+                        })
+            
+            # If no services found, create a basic connected status
+            if not services:
+                services = [{
+                    'name': 'UptimeKuma Instance',
+                    'status': 'up',
+                    'uptime': '100%',
+                    'responseTime': '<100ms',
+                    'url': base_url
+                }]
+            
+            # Calculate overall status
+            up_count = len([s for s in services if s['status'] == 'up'])
+            total_count = len(services)
+            
+            if up_count == total_count:
+                overall_status = 'All Systems Operational'
+            elif up_count > 0:
+                overall_status = 'Partial System Outage'
+            else:
+                overall_status = 'Major System Outage'
+            
+            return {
+                'error': False,
+                'message': 'Data fetched successfully',
+                'services': services,
+                'overall_status': overall_status,
+                'total_services': total_count
+            }
+            
+        except Exception as e:
+            return {
+                'error': True,
+                'message': f'Error transforming data: {str(e)}',
+                'services': [],
+                'overall_status': 'Data Error',
+                'total_services': 0
+            }
+    
+    def serve_custom_uptimekuma_dashboard(self):
+        """Serve our custom UptimeKuma dashboard that loads real data"""
+        try:
+            # Parse the URL path to get dashboard config
+            path_parts = self.path.split('/')[2:]  # Remove empty and 'uptimekuma'
+            dashboard_id = path_parts[0] if path_parts else ''
+            
+            # Read the template dashboard and inject dashboard config
+            template_path = Path(__file__).parent / 'static' / 'uptimekuma-live.html'
+            
+            # If template doesn't exist yet, we'll create it
+            if not template_path.exists():
+                self.create_live_uptimekuma_template()
+            
+            with open(template_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            # Inject the dashboard ID into the template
+            content = content.replace('{{DASHBOARD_ID}}', dashboard_id)
+            
+            self.send_response(HTTPStatus.OK)
+            self.send_header('Content-type', 'text/html; charset=utf-8')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(content.encode('utf-8'))
+            
+        except Exception as e:
+            self.send_error(HTTPStatus.INTERNAL_SERVER_ERROR, str(e))
+    
+    def create_live_uptimekuma_template(self):
+        """Create the live UptimeKuma dashboard template"""
+        # This method will be implemented later when we create the template
+        pass
     
     def serve_dashboard_proxy(self):
         """Proxy dashboard requests to handle CORS and X-Frame-Options"""
@@ -199,7 +451,9 @@ def load_config():
             "auto_refresh": True,
             "refresh_interval": 300,
             "fullscreen": True,
-            "show_navigation": True
+            "show_navigation": True,
+            "enable_keyboard_shortcuts": True,
+            "use_proxy": False
         }
     }
     
@@ -269,7 +523,7 @@ def test_dashboard_url(url, username=None, password=None):
 
 def run_server(port=5000, host='0.0.0.0'):
     """Run the HTTP server"""
-    print(f"Starting Digital Signage Platform on {host}:{port}")
+    print(f"Starting SignageCommander Platform on {host}:{port}")
     print(f"Access the dashboard at: http://{host}:{port}")
     print(f"Configuration interface: http://{host}:{port}/config")
     

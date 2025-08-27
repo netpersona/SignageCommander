@@ -1,5 +1,5 @@
 /**
- * Digital Signage Platform - Configuration Interface
+ * SignageCommander Platform - Configuration Interface
  * Manages dashboard configuration and settings
  */
 
@@ -12,21 +12,26 @@ class ConfigurationManager {
     }
     
     async init() {
-        console.log('Initializing Configuration Manager...');
-        
-        // Load current configuration
-        await this.loadConfig();
-        
-        // Setup UI
-        this.setupUI();
-        
-        // Setup event listeners
-        this.setupEventListeners();
-        
-        // Populate form with current config
-        this.populateForm();
-        
-        console.log('Configuration Manager initialized');
+        try {
+            console.log('Initializing Configuration Manager...');
+            
+            // Load current configuration
+            await this.loadConfig();
+            
+            // Setup UI
+            this.setupUI();
+            
+            // Setup event listeners
+            this.setupEventListeners();
+            
+            // Populate form with current config
+            this.populateForm();
+            
+            console.log('Configuration Manager initialized');
+        } catch (error) {
+            console.error('Configuration Manager initialization failed:', error);
+            this.showStatus('error', `Initialization failed: ${error.message}`);
+        }
     }
     
     async loadConfig() {
@@ -69,7 +74,12 @@ class ConfigurationManager {
     
     setupEventListeners() {
         // Save configuration button
-        document.getElementById('save-config').addEventListener('click', () => this.saveConfig());
+        document.getElementById('save-config').addEventListener('click', () => {
+            this.saveConfig().catch(error => {
+                console.error('Save config failed:', error);
+                this.showStatus('error', `Failed to save: ${error.message}`);
+            });
+        });
         
         // Add dashboard button
         document.getElementById('add-dashboard').addEventListener('click', () => this.addDashboard());
@@ -80,7 +90,12 @@ class ConfigurationManager {
         // Test connection buttons (delegated event handling)
         document.addEventListener('click', (e) => {
             if (e.target.classList.contains('btn-test')) {
-                this.testDashboardConnection(e.target);
+                this.testDashboardConnection(e.target).catch(error => {
+                    console.error('Test connection failed:', error);
+                    const dashboardEntry = e.target.closest('.dashboard-entry');
+                    const resultDiv = dashboardEntry.querySelector('.test-result');
+                    this.showTestResult(resultDiv, false, `Connection test error: ${error.message}`);
+                });
             } else if (e.target.classList.contains('btn-remove')) {
                 this.removeDashboard(e.target);
             }
@@ -128,9 +143,13 @@ class ConfigurationManager {
             clone.querySelector('.dashboard-username').value = dashboardData.username || '';
             clone.querySelector('.dashboard-password').value = dashboardData.password || '';
             clone.querySelector('.dashboard-enabled').checked = dashboardData.enabled !== false;
+            clone.querySelector('.dashboard-use-proxy').checked = dashboardData.use_proxy === true;
+            clone.querySelector('.dashboard-dark-mode').checked = dashboardData.dark_mode === true;
         } else {
             // Set default values for new dashboard
             clone.querySelector('.dashboard-enabled').checked = true;
+            clone.querySelector('.dashboard-use-proxy').checked = false;
+            clone.querySelector('.dashboard-dark-mode').checked = false;
         }
         
         // Add to container
@@ -235,6 +254,11 @@ class ConfigurationManager {
     }
     
     isValidUrl(string) {
+        // Allow demo URLs (paths starting with /static/)
+        if (string.startsWith('/static/')) {
+            return true;
+        }
+        
         try {
             new URL(string);
             return true;
@@ -274,6 +298,8 @@ class ConfigurationManager {
             const username = entry.querySelector('.dashboard-username').value.trim();
             const password = entry.querySelector('.dashboard-password').value.trim();
             const enabled = entry.querySelector('.dashboard-enabled').checked;
+            const use_proxy = entry.querySelector('.dashboard-use-proxy').checked;
+            const dark_mode = entry.querySelector('.dashboard-dark-mode').checked;
             
             // Only include if name and URL are provided
             if (name && url) {
@@ -283,7 +309,9 @@ class ConfigurationManager {
                     type,
                     username,
                     password,
-                    enabled
+                    enabled,
+                    use_proxy,
+                    dark_mode
                 });
             }
         });
@@ -379,6 +407,7 @@ class ConfigurationManager {
         statusElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
     
+    
     updateSystemInfo() {
         // Update dashboard URL
         const dashboardUrl = `${window.location.protocol}//${window.location.host}/`;
@@ -388,7 +417,11 @@ class ConfigurationManager {
 
 // Initialize when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
-    window.configManager = new ConfigurationManager();
+    try {
+        window.configManager = new ConfigurationManager();
+    } catch (error) {
+        console.error('Failed to create ConfigurationManager:', error);
+    }
 });
 
 // Handle form submission with Enter key
@@ -396,7 +429,12 @@ document.addEventListener('keydown', (e) => {
     if (e.ctrlKey && e.key === 's') {
         e.preventDefault();
         if (window.configManager) {
-            window.configManager.saveConfig();
+            window.configManager.saveConfig().catch(error => {
+                console.error('Keyboard save failed:', error);
+                if (window.configManager.showStatus) {
+                    window.configManager.showStatus('error', `Failed to save: ${error.message}`);
+                }
+            });
         }
     }
 });

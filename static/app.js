@@ -1,5 +1,5 @@
 /**
- * Digital Signage Platform - Main Application
+ * SignageCommander Platform - Main Application
  * Manages dashboard display, rotation, and user interactions
  */
 
@@ -14,28 +14,44 @@ class DigitalSignage {
         this.isFullscreen = false;
         this.lastActivity = Date.now();
         
-        this.init();
+        // Listen for iframe ready messages
+        window.addEventListener('message', (event) => {
+            if (event.data && event.data.type === 'iframeReady') {
+                // Resend dark mode state when iframe is ready
+                setTimeout(() => this.applyCurrentDashboardTheme(), 100);
+            }
+        });
+        
+        // Initialize with error handling
+        this.init().catch(error => {
+            console.error('App initialization error:', error);
+            this.showError('Initialization Failed', `Application failed to start: ${error.message}`);
+        });
     }
     
     async init() {
-        console.log('Initializing Digital Signage Platform...');
-        
-        // Load configuration
-        await this.loadConfig();
-        
-        // Setup UI elements
-        this.setupUI();
-        
-        // Setup event listeners
-        this.setupEventListeners();
-        
-        // Initialize dashboards
-        this.initializeDashboards();
-        
-        // Start the application
-        this.start();
-        
-        console.log('Digital Signage Platform initialized');
+        try {
+            console.log('Initializing SignageCommander Platform...');
+            
+            // Load configuration
+            await this.loadConfig();
+            
+            // Setup UI elements
+            this.setupUI();
+            
+            // Setup event listeners
+            this.setupEventListeners();
+            
+            // Initialize dashboards
+            this.initializeDashboards();
+            
+            // Start the application
+            this.start();
+            
+            console.log('SignageCommander Platform initialized');
+        } catch (error) {
+            console.error('Initialization failed:', error);
+        }
     }
     
     async loadConfig() {
@@ -53,7 +69,7 @@ class DigitalSignage {
             
         } catch (error) {
             console.error('Failed to load configuration:', error);
-            this.showError('Configuration Error', `Failed to load configuration: ${error.message}`);
+            this.showNetworkError('Configuration Error', `Failed to load configuration: ${error.message}`);
         }
     }
     
@@ -76,6 +92,9 @@ class DigitalSignage {
         
         // Apply initial settings
         this.applySettings();
+        
+        // Apply theme based on current dashboard
+        this.applyCurrentDashboardTheme();
     }
     
     setupEventListeners() {
@@ -110,6 +129,7 @@ class DigitalSignage {
         // Window focus events for refresh
         document.addEventListener('visibilitychange', () => this.handleVisibilityChange());
         window.addEventListener('focus', () => this.handleWindowFocus());
+        
     }
     
     initializeDashboards() {
@@ -138,6 +158,23 @@ class DigitalSignage {
             
             iframe.addEventListener('load', () => {
                 console.log(`Dashboard loaded: ${dashboard.name}`);
+                
+                // Send initial dark mode state to iframe
+                setTimeout(() => {
+                    try {
+                        try {
+                            iframe.contentWindow.postMessage({
+                                type: 'darkMode',
+                                enabled: dashboard.dark_mode === true
+                            }, '*');
+                        } catch (error) {
+                            // Ignore cross-origin errors
+                            console.debug('Cross-origin postMessage blocked:', error.message);
+                        }
+                    } catch (error) {
+                        // Ignore cross-origin errors
+                    }
+                }, 500); // Delay to ensure iframe is ready
             });
             
             container.appendChild(iframe);
@@ -145,12 +182,23 @@ class DigitalSignage {
     }
     
     buildDashboardUrl(dashboard) {
+        // For UptimeKuma dashboards, use our custom dashboard interface
+        if (dashboard.type === 'uptimekuma') {
+            // Use our custom UptimeKuma dashboard that loads real data
+            const customUrl = `/uptimekuma/${encodeURIComponent(dashboard.name)}`;
+            const separator = customUrl.includes('?') ? '&' : '?';
+            return `${customUrl}${separator}_t=${Date.now()}`;
+        }
+        
         let url = dashboard.url;
         
-        // Check if this is an external URL that needs proxying
+        // Check if proxy is enabled for this specific dashboard (default to false for stability)
+        const useProxy = dashboard.use_proxy === true;
+        
+        // Check if this is an external URL that might need proxying
         const isExternal = url.startsWith('http://') || url.startsWith('https://');
         
-        if (isExternal) {
+        if (isExternal && useProxy) {
             // Use proxy to bypass X-Frame-Options and CORS restrictions
             let proxyUrl = `/proxy/${url}`;
             
@@ -166,8 +214,17 @@ class DigitalSignage {
             
             return proxyUrl;
         } else {
-            // For local/relative URLs, use original logic
-            if (dashboard.username && dashboard.password) {
+            // For local/relative URLs or when proxy is disabled, use direct URL
+            if (dashboard.username && dashboard.password && isExternal) {
+                try {
+                    const urlObj = new URL(url);
+                    urlObj.username = dashboard.username;
+                    urlObj.password = dashboard.password;
+                    url = urlObj.toString();
+                } catch (error) {
+                    console.warn('Failed to add authentication to URL:', error);
+                }
+            } else if (dashboard.username && dashboard.password) {
                 try {
                     const urlObj = new URL(url, window.location.origin);
                     urlObj.username = dashboard.username;
@@ -210,6 +267,35 @@ class DigitalSignage {
         if (settings.fullscreen && !this.isFullscreen) {
             setTimeout(() => this.enterFullscreen(), 1000);
         }
+    }
+    
+    applyCurrentDashboardTheme() {
+        if (!this.dashboards || this.dashboards.length === 0) {
+            return;
+        }
+        
+        const currentDashboard = this.dashboards[this.currentIndex];
+        const isDarkMode = currentDashboard && currentDashboard.dark_mode === true;
+        
+        if (isDarkMode) {
+            document.body.classList.add('dark-mode');
+        } else {
+            document.body.classList.remove('dark-mode');
+        }
+        
+        // Send dark mode message to all iframes
+        const iframes = document.querySelectorAll('iframe.dashboard-iframe');
+        iframes.forEach((iframe, index) => {
+            try {
+                iframe.contentWindow.postMessage({
+                    type: 'darkMode',
+                    enabled: isDarkMode
+                }, '*');
+            } catch (error) {
+                // Ignore cross-origin errors
+                console.debug('Cross-origin postMessage blocked:', error.message);
+            }
+        });
     }
     
     start() {
@@ -256,6 +342,9 @@ class DigitalSignage {
         document.getElementById('current-dashboard').textContent = currentDashboard.name;
         
         this.currentIndex = index;
+        
+        // Apply theme for current dashboard
+        this.applyCurrentDashboardTheme();
         
         // Hide error states
         document.getElementById('network-error').style.display = 'none';
@@ -363,25 +452,53 @@ class DigitalSignage {
         const elem = document.documentElement;
         
         if (elem.requestFullscreen) {
-            elem.requestFullscreen();
+            elem.requestFullscreen().catch(error => {
+                console.debug('Fullscreen request denied:', error.message);
+            });
         } else if (elem.webkitRequestFullscreen) {
-            elem.webkitRequestFullscreen();
+            try {
+                elem.webkitRequestFullscreen();
+            } catch (error) {
+                console.debug('Webkit fullscreen failed:', error.message);
+            }
         } else if (elem.mozRequestFullScreen) {
-            elem.mozRequestFullScreen();
+            try {
+                elem.mozRequestFullScreen();
+            } catch (error) {
+                console.debug('Mozilla fullscreen failed:', error.message);
+            }
         } else if (elem.msRequestFullscreen) {
-            elem.msRequestFullscreen();
+            try {
+                elem.msRequestFullscreen();
+            } catch (error) {
+                console.debug('MS fullscreen failed:', error.message);
+            }
         }
     }
     
     exitFullscreen() {
         if (document.exitFullscreen) {
-            document.exitFullscreen();
+            document.exitFullscreen().catch(error => {
+                console.debug('Exit fullscreen denied:', error.message);
+            });
         } else if (document.webkitExitFullscreen) {
-            document.webkitExitFullscreen();
+            try {
+                document.webkitExitFullscreen();
+            } catch (error) {
+                console.debug('Webkit exit fullscreen failed:', error.message);
+            }
         } else if (document.mozCancelFullScreen) {
-            document.mozCancelFullScreen();
+            try {
+                document.mozCancelFullScreen();
+            } catch (error) {
+                console.debug('Mozilla exit fullscreen failed:', error.message);
+            }
         } else if (document.msExitFullscreen) {
-            document.msExitFullscreen();
+            try {
+                document.msExitFullscreen();
+            } catch (error) {
+                console.debug('MS exit fullscreen failed:', error.message);
+            }
         }
     }
     
@@ -546,4 +663,6 @@ window.addEventListener('error', (event) => {
 // Handle unhandled promise rejections
 window.addEventListener('unhandledrejection', (event) => {
     console.error('Unhandled promise rejection:', event.reason);
+    // Prevent the default unhandled rejection behavior
+    event.preventDefault();
 });
