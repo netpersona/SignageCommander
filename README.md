@@ -12,10 +12,6 @@ A web-based digital signage platform designed to display and rotate between Upti
 
 ![Configuration](https://github.com/user-attachments/assets/28327ea9-59b4-4d60-bc1b-aa355f26113b)
 
-## User Preferences
-
-Preferred communication style: Simple, everyday language.
-
 ## System Architecture
 
 ### Frontend Architecture
